@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Vextris</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ═══ LOGIN ═══════════════════════════════════════════════════════════════ -->
+<div id="s-login" class="screen">
+  <h1>Vextris</h1>
+  <div class="login-card">
+    <input id="handle-in" type="text" maxlength="15"
+           placeholder="Enter your name"
+           autocomplete="off" autocapitalize="none" spellcheck="false">
+    <button id="join-btn">Join</button>
+    <p id="login-err"></p>
+  </div>
+</div>
+
+<!-- ═══ LOBBY ════════════════════════════════════════════════════════════════ -->
+<div id="s-lobby" class="screen" style="display:none">
+  <div class="lobby-top">
+    <h1>Vextris</h1>
+    <p class="lob-me-line">You are <strong id="lob-me"></strong></p>
+  </div>
+  <div id="lob-incoming"></div>
+  <div class="lob-section">
+    <div class="lbl">PLAYERS ONLINE</div>
+    <div id="lob-list"></div>
+    <div id="lob-empty" class="lob-empty">Waiting for others to join…</div>
+  </div>
+</div>
+
+<!-- ═══ GAME ══════════════════════════════════════════════════════════════════ -->
+<div id="s-game" class="screen" style="display:none">
+
+  <!-- Overlay (countdown, phase switch, game over) -->
+  <div id="overlay">
+    <div id="oc">
+      <h1>Vextris</h1>
+      <p id="omsg"></p>
+    </div>
+  </div>
+
+  <!-- Compact info bar shown only on touch/mobile -->
+  <div id="mob-bar">
+    <div class="mb-item"><span class="mb-lbl">SCORE</span><span id="m-score">0</span></div>
+    <div class="mb-item"><span class="mb-lbl">LVL</span><span id="m-level">1</span></div>
+    <div class="mb-item"><span class="mb-lbl">LINES</span><span id="m-lines">0</span></div>
+    <div class="mb-sep"></div>
+    <div class="mb-item small" id="m-standings"></div>
+  </div>
+
+  <!-- Main game layout -->
+  <div id="wrap">
+    <div id="left">
+      <div id="role-badge"></div>
+      <div id="turn-banner"></div>
+      <canvas id="board" width="300" height="600"></canvas>
+    </div>
+    <div id="right">
+      <div class="box">
+        <div class="lbl">SCORE</div>
+        <div id="score" class="big">0</div>
+      </div>
+      <div class="box">
+        <div class="lbl">LEVEL</div>
+        <div id="level" class="big">1</div>
+      </div>
+      <div class="box">
+        <div class="lbl">LINES</div>
+        <div id="lines" class="big">0</div>
+      </div>
+      <div class="box">
+        <div class="lbl">STANDINGS</div>
+        <div id="p1score"></div>
+        <div id="p2score"></div>
+      </div>
+      <div class="box" id="controls">
+        <div class="lbl">CONTROLS</div>
+        <div>&larr; &rarr; &nbsp; Move</div>
+        <div>&uarr; &nbsp;&nbsp;&nbsp;&nbsp; Rotate</div>
+        <div>&darr; / Space  Drop</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Touch D-pad — shown only on touch devices via CSS -->
+  <div id="touch-ctrls">
+    <div class="tc-row">
+      <button class="tc-btn" id="tc-left">&#9664;</button>
+      <button class="tc-btn" id="tc-rot">&#8635;</button>
+      <button class="tc-btn" id="tc-right">&#9654;</button>
+    </div>
+    <div class="tc-row">
+      <button class="tc-btn tc-drop" id="tc-drop">&#9660; DROP</button>
+    </div>
+  </div>
+
+</div><!-- #s-game -->
+
+<script src="game.js"></script>
+</body>
+</html>
