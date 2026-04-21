@@ -273,7 +273,7 @@ class Lobby:
         self.challenges = {}
 
     async def handler(self, request):
-        ws = web.WebSocketResponse()
+        ws = web.WebSocketResponse(heartbeat=30)
         await ws.prepare(request)
 
         handle = None
@@ -297,8 +297,11 @@ class Lobby:
                     'message':'Name must be 2–15 chars (letters, numbers, space, hyphen, underscore)'}))
                 return ws
             if candidate in self.players:
-                await ws.send_str(json.dumps({'type':'error','message':'That name is already taken'}))
-                return ws
+                if self.players[candidate]['ws'].closed:
+                    await self._player_left(candidate)  # evict stale session
+                else:
+                    await ws.send_str(json.dumps({'type':'error','message':'That name is already taken'}))
+                    return ws
 
             handle = candidate
             self.players[handle] = {'ws':ws,'game':None}
@@ -313,7 +316,7 @@ class Lobby:
         except Exception:
             pass
         finally:
-            if handle:
+            if handle and self.players.get(handle, {}).get('ws') is ws:
                 await self._player_left(handle)
 
         return ws
