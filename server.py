@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
-import asyncio, json, os, re, random, threading
-from http.server import HTTPServer, SimpleHTTPRequestHandler
-from websockets import serve as ws_serve
+import asyncio, json, os, re, random
+from aiohttp import web, WSMsgType
 
-HTTP_PORT  = 3000
-WS_PORT    = 3001
-BOARD_W    = 10
-BOARD_H    = 20
-PHASE_SEC  = 3 * 60
+PORT      = int(os.environ.get('PORT', 3000))
+BOARD_W   = 10
+BOARD_H   = 20
+PHASE_SEC = 3 * 60
 
-HANDLE_RE  = re.compile(r'^[\w\s\-]{2,15}$')
+HANDLE_RE = re.compile(r'^[\w\s\-]{2,15}$')
 
 # ── Pure game logic ───────────────────────────────────────────────────────────
 
@@ -71,13 +69,13 @@ def make_piece(ptype):
 def fall_sec(level):
     return max(0.08, 1.0-(level-1)*0.08)
 
-# ── Game instance (one match between two players) ────────────────────────────
+# ── Game instance ─────────────────────────────────────────────────────────────
 
 class GameInstance:
     def __init__(self, lobby, handles, sockets):
         self.lobby   = lobby
-        self.handles = list(handles)   # [h0, h1]
-        self.sockets = list(sockets)   # [ws0, ws1]
+        self.handles = list(handles)
+        self.sockets = list(sockets)
         self.G       = None
         self._fall_t = self._phase_t = self._switch_t = None
 
@@ -96,7 +94,7 @@ class GameInstance:
     async def _bcast(self, msg):
         s = json.dumps(msg)
         for ws in self.sockets:
-            try: await ws.send(s)
+            try: await ws.send_str(s)
             except Exception: pass
 
     def _cancel_fall(self):
@@ -116,7 +114,7 @@ class GameInstance:
         }
         for i, (h, ws) in enumerate(zip(self.handles, self.sockets)):
             try:
-                await ws.send(json.dumps({
+                await ws.send_str(json.dumps({
                     'type':'game_start','your_idx':i,'handles':self.handles,
                 }))
             except Exception: pass
@@ -198,9 +196,9 @@ class GameInstance:
             self._switch_t = asyncio.create_task(self._switch_phase())
         else:
             G['phase'] = 'gameover'
-            s0, s1   = G['scores']
-            wi        = 0 if s0>s1 else (1 if s1>s0 else -1)
-            winner    = self.handles[wi] if wi >= 0 else None
+            s0, s1 = G['scores']
+            wi     = 0 if s0>s1 else (1 if s1>s0 else -1)
+            winner = self.handles[wi] if wi >= 0 else None
             await self._bcast({
                 'type':'gameover',
                 'scores':{self.handles[0]:s0, self.handles[1]:s1},
@@ -261,55 +259,64 @@ class GameInstance:
         for i, h in enumerate(self.handles):
             if h != handle:
                 try:
-                    await self.sockets[i].send(json.dumps({
+                    await self.sockets[i].send_str(json.dumps({
                         'type':'opponent_left','scores':scores,
                     }))
                 except Exception: pass
         await self.lobby.game_ended(self)
 
-# ── Lobby (waiting room) ──────────────────────────────────────────────────────
+# ── Lobby ─────────────────────────────────────────────────────────────────────
 
 class Lobby:
     def __init__(self):
-        self.players    = {}   # handle → {ws, game}
-        self.challenges = {}   # challenger → target
+        self.players    = {}
+        self.challenges = {}
 
-    async def handler(self, ws):
+    async def handler(self, request):
+        ws = web.WebSocketResponse()
+        await ws.prepare(request)
+
         handle = None
         try:
             try:
-                raw = await asyncio.wait_for(ws.recv(), timeout=60)
+                msg = await asyncio.wait_for(ws.receive(), timeout=60)
             except asyncio.TimeoutError:
-                return
+                return ws
 
-            msg = json.loads(raw)
-            if msg.get('type') != 'join_lobby':
-                await ws.send(json.dumps({'type':'error','message':'Send join_lobby first'}))
-                return
+            if msg.type != WSMsgType.TEXT:
+                return ws
 
-            candidate = msg.get('handle','').strip()
+            data = json.loads(msg.data)
+            if data.get('type') != 'join_lobby':
+                await ws.send_str(json.dumps({'type':'error','message':'Send join_lobby first'}))
+                return ws
+
+            candidate = data.get('handle','').strip()
             if not HANDLE_RE.match(candidate):
-                await ws.send(json.dumps({'type':'error',
+                await ws.send_str(json.dumps({'type':'error',
                     'message':'Name must be 2–15 chars (letters, numbers, space, hyphen, underscore)'}))
-                return
+                return ws
             if candidate in self.players:
-                await ws.send(json.dumps({'type':'error','message':'That name is already taken'}))
-                return
+                await ws.send_str(json.dumps({'type':'error','message':'That name is already taken'}))
+                return ws
 
             handle = candidate
             self.players[handle] = {'ws':ws,'game':None}
-            await ws.send(json.dumps({'type':'joined_lobby','handle':handle}))
+            await ws.send_str(json.dumps({'type':'joined_lobby','handle':handle}))
             await self._bcast_lobby()
 
-            async for raw in ws:
-                try: await self._on_msg(handle, json.loads(raw))
-                except Exception: pass
+            async for msg in ws:
+                if msg.type == WSMsgType.TEXT:
+                    try: await self._on_msg(handle, json.loads(msg.data))
+                    except Exception: pass
 
         except Exception:
             pass
         finally:
             if handle:
                 await self._player_left(handle)
+
+        return ws
 
     async def _on_msg(self, handle, msg):
         mtype  = msg.get('type')
@@ -344,12 +351,11 @@ class Lobby:
                 del self.challenges[challenger]
                 c = self.players.get(challenger)
                 if c:
-                    try: await c['ws'].send(json.dumps({'type':'challenge_declined','by':handle}))
+                    try: await c['ws'].send_str(json.dumps({'type':'challenge_declined','by':handle}))
                     except Exception: pass
                 await self._bcast_lobby()
 
     async def _start_game(self, h0, h1):
-        # Clear all challenges touching these players
         self.challenges = {
             k:v for k,v in self.challenges.items()
             if k not in (h0,h1) and v not in (h0,h1)
@@ -366,7 +372,7 @@ class Lobby:
             p = self.players.get(h)
             if p and p['game'] is game:
                 p['game'] = None
-                try: await p['ws'].send(json.dumps({'type':'returned_to_lobby'}))
+                try: await p['ws'].send_str(json.dumps({'type':'returned_to_lobby'}))
                 except Exception: pass
         await self._bcast_lobby()
 
@@ -393,36 +399,37 @@ class Lobby:
                 'outgoing':self.challenges.get(handle),
                 'incoming':incoming,
             }
-            try: await player['ws'].send(json.dumps(msg))
+            try: await player['ws'].send_str(json.dumps(msg))
             except Exception: pass
 
-# ── Static file server ────────────────────────────────────────────────────────
-
-def run_http(public_dir):
-    class Silent(SimpleHTTPRequestHandler):
-        def log_message(self,*a): pass
-        def __init__(self,*a,**kw): super().__init__(*a,directory=public_dir,**kw)
-    HTTPServer(('0.0.0.0',HTTP_PORT),Silent).serve_forever()
+# ── Entry point ───────────────────────────────────────────────────────────────
 
 def local_ip():
     import socket
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-            s.connect(('8.8.8.8',80)); return s.getsockname()[0]
+            s.connect(('8.8.8.8', 80)); return s.getsockname()[0]
     except Exception: return None
-
-# ── Entry point ───────────────────────────────────────────────────────────────
 
 async def main():
     public_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'public')
-    threading.Thread(target=run_http, args=(public_dir,), daemon=True).start()
     lobby = Lobby()
+    app = web.Application()
+    index = os.path.join(public_dir, 'index.html')
+    app.router.add_get('/ws', lobby.handler)
+    app.router.add_get('/', lambda r: web.FileResponse(index))
+    app.router.add_static('/', public_dir)
+
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', PORT)
+    await site.start()
+
     print('\nVextris running!\n')
     if ip := local_ip():
-        print(f'  Network:   http://{ip}:{HTTP_PORT}')
-    print(f'  Localhost: http://localhost:{HTTP_PORT}\n')
-    async with ws_serve(lobby.handler, '0.0.0.0', WS_PORT):
-        await asyncio.Future()
+        print(f'  Network:   http://{ip}:{PORT}')
+    print(f'  Localhost: http://localhost:{PORT}\n')
+    await asyncio.Future()
 
 if __name__ == '__main__':
     asyncio.run(main())

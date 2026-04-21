@@ -110,7 +110,8 @@ window.addEventListener('resize', () => {
 // ── WebSocket ─────────────────────────────────────────────────────────────────
 
 function connect() {
-  ws = new WebSocket(`ws://${location.hostname}:3001`);
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}/ws`);
   ws.onmessage = e => onMsg(JSON.parse(e.data));
   ws.onclose   = () => { loginErr.textContent = 'Disconnected — refresh to reconnect'; showScreen('login'); };
   ws.onerror   = () => { loginErr.textContent = 'Connection error'; showScreen('login'); };
