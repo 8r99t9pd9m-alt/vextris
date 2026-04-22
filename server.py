@@ -176,7 +176,7 @@ class GameInstance:
             G['scores'][self._tidx()] += line_score(cleared, G['level'])
 
         G['piece_count'] += 1
-        G['controller'] = self._sidx() if G['piece_count']%3==1 else self._tidx()
+        G['controller'] = self._sidx() if G['piece_count']%3==2 else self._tidx()
         G['piece'] = make_piece(rand_type())
 
         if collides(G['board'], G['piece']['shape'], G['piece']['x'], G['piece']['y']):
