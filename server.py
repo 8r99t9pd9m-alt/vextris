@@ -5,7 +5,6 @@ from aiohttp import web, WSMsgType
 PORT      = int(os.environ.get('PORT', 3000))
 BOARD_W   = 10
 BOARD_H   = 20
-PHASE_SEC = 3 * 60
 
 HANDLE_RE = re.compile(r'^[\w\s\-]{2,15}$')
 
@@ -77,7 +76,7 @@ class GameInstance:
         self.handles = list(handles)
         self.sockets = list(sockets)
         self.G       = None
-        self._fall_t = self._phase_t = self._switch_t = None
+        self._fall_t = self._switch_t = None
 
     def _tidx(self): return 0 if self.G['phase_num'] == 1 else 1
     def _sidx(self): return 1 if self.G['phase_num'] == 1 else 0
@@ -99,12 +98,10 @@ class GameInstance:
 
     def _cancel_fall(self):
         if self._fall_t:   self._fall_t.cancel();   self._fall_t   = None
-    def _cancel_phase(self):
-        if self._phase_t:  self._phase_t.cancel();  self._phase_t  = None
     def _cancel_switch(self):
         if self._switch_t: self._switch_t.cancel(); self._switch_t = None
     def _cancel_all(self):
-        self._cancel_fall(); self._cancel_phase(); self._cancel_switch()
+        self._cancel_fall(); self._cancel_switch()
 
     async def start(self):
         self.G = {
@@ -127,7 +124,6 @@ class GameInstance:
         G.update({'phase':'playing','board':empty_board(),'level':1,'lines':0,
                   'piece_count':0,'controller':self._tidx(),
                   'piece':make_piece(rand_type())})
-        self._phase_t = asyncio.create_task(self._phase_timer())
         self._schedule_fall()
         await self._bcast(self._state_msg())
 
@@ -147,13 +143,6 @@ class GameInstance:
                 self._schedule_fall()
             else:
                 await self._do_lock()
-        except asyncio.CancelledError:
-            pass
-
-    async def _phase_timer(self):
-        try:
-            await asyncio.sleep(PHASE_SEC)
-            await self._end_phase('time')
         except asyncio.CancelledError:
             pass
 
@@ -188,7 +177,7 @@ class GameInstance:
         self._schedule_fall()
 
     async def _end_phase(self, reason):
-        self._cancel_phase(); self._cancel_fall()
+        self._cancel_fall()
         G = self.G
         if G['phase_num'] == 1:
             G['phase'] = 'switching'
