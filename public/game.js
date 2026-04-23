@@ -143,13 +143,18 @@ function onMsg(msg) {
       myIdx       = msg.your_idx;
       gameHandles = msg.handles;
       state       = null;
-      roleBadge.textContent = 'TETRIS PLAYER';
-      roleBadge.className   = 'is-tetris';
+      const isTetris = myIdx === 0;
+      roleBadge.textContent = isTetris ? 'TETRIS PLAYER' : 'SABOTEUR';
+      roleBadge.className   = isTetris ? 'is-tetris' : 'is-saboteur';
       turnBanner.textContent = 'YOUR TURN';
       turnBanner.className   = 'my-turn';
       showScreen('game');
+      const myRole = isTetris ? 'Your role is to play normally and get a high score!'
+                              : 'You are the SABOTEUR - be unhelpful!';
+      const opRole = isTetris ? `${gameHandles[1]} is the SABOTEUR`
+                              : `${gameHandles[0]} is the TETRIS PLAYER`;
       showOverlay('Get Ready!',
-        `${gameHandles[0]} vs ${gameHandles[1]}\nPhase 1 starting…`);
+        `${gameHandles[0]} vs ${gameHandles[1]}\n\n${myRole}\n${opRole}\n\nRoles swap for Phase 2`);
       break;
 
     case 'state':

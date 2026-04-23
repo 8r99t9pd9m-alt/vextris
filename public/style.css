@@ -81,6 +81,37 @@ h1 {
   text-align: center;
 }
 
+.how-to-play {
+  width: min(360px, 90vw);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 13px;
+  color: #888;
+  text-align: center;
+  line-height: 1.6;
+}
+.how-to-play strong { color: #aaa; }
+
+.role-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 13px;
+  color: #aaa;
+}
+.role-tag {
+  font-size: 10px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.tetris-tag  { background: #0080a0; color: #fff; }
+.saboteur-tag { background: #802000; color: #fff; }
+
 /* ── Lobby ────────────────────────────────────────────────────────────────── */
 
 #s-lobby {
